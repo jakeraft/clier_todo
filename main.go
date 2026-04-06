@@ -101,12 +101,13 @@ func addTodo(db *sql.DB, title string) error {
 }
 
 func listTodos(db *sql.DB, onlyDone bool) error {
-	query := "SELECT id, title, done FROM todos WHERE done = ?"
-	doneValue := 0
+	var rows *sql.Rows
+	var err error
 	if onlyDone {
-		doneValue = 1
+		rows, err = db.Query("SELECT id, title, done FROM todos WHERE done = 1")
+	} else {
+		rows, err = db.Query("SELECT id, title, done FROM todos")
 	}
-	rows, err := db.Query(query, doneValue)
 	if err != nil {
 		return err
 	}
