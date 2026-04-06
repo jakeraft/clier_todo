@@ -34,8 +34,13 @@ func main() {
 			os.Exit(1)
 		}
 	case "list":
-		showDone := len(os.Args) > 2 && os.Args[2] == "--done"
-		if err := listTodos(db, showDone); err != nil {
+		filterDone := false
+		for _, arg := range os.Args[2:] {
+			if arg == "--done" {
+				filterDone = true
+			}
+		}
+		if err := listTodos(db, filterDone); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -68,7 +73,7 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  todo add <title>    Add a new todo")
-	fmt.Println("  todo list [--done]  List all todos")
+	fmt.Println("  todo list [--done]     List todos (--done filters to completed only)")
 	fmt.Println("  todo done <id>      Mark a todo as done")
 	fmt.Println("  todo delete <id>    Delete a todo")
 }
@@ -100,14 +105,12 @@ func addTodo(db *sql.DB, title string) error {
 	return nil
 }
 
-func listTodos(db *sql.DB, showDone bool) error {
-	var rows *sql.Rows
-	var err error
-	if showDone {
-		rows, err = db.Query("SELECT id, title, done FROM todos WHERE done = 1")
-	} else {
-		rows, err = db.Query("SELECT id, title, done FROM todos WHERE done = 0")
+func listTodos(db *sql.DB, filterDone bool) error {
+	query := "SELECT id, title, done FROM todos"
+	if filterDone {
+		query += " WHERE done = 1"
 	}
+	rows, err := db.Query(query)
 	if err != nil {
 		return err
 	}
@@ -129,7 +132,7 @@ func listTodos(db *sql.DB, showDone bool) error {
 		count++
 	}
 	if count == 0 {
-		if showDone {
+		if filterDone {
 			fmt.Println("No completed todos.")
 		} else {
 			fmt.Println("No todos yet. Add one with: todo add <title>")
