@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -28,7 +29,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "usage: todo add <title>")
 			os.Exit(1)
 		}
-		title := strings.Join(os.Args[2:], " ")
+		title := strings.TrimSpace(strings.Join(os.Args[2:], " "))
 		if err := addTodo(db, title); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -44,6 +45,10 @@ func main() {
 			fmt.Fprintln(os.Stderr, "usage: todo done <id>")
 			os.Exit(1)
 		}
+		if _, err := strconv.Atoi(os.Args[2]); err != nil {
+			fmt.Fprintf(os.Stderr, "error: invalid id: must be a number\n")
+			os.Exit(1)
+		}
 		if err := doneTodo(db, os.Args[2]); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
@@ -51,6 +56,10 @@ func main() {
 	case "delete":
 		if len(os.Args) < 3 {
 			fmt.Fprintln(os.Stderr, "usage: todo delete <id>")
+			os.Exit(1)
+		}
+		if _, err := strconv.Atoi(os.Args[2]); err != nil {
+			fmt.Fprintf(os.Stderr, "error: invalid id: must be a number\n")
 			os.Exit(1)
 		}
 		if err := deleteTodo(db, os.Args[2]); err != nil {
@@ -91,11 +100,17 @@ func openDB(path string) (*sql.DB, error) {
 }
 
 func addTodo(db *sql.DB, title string) error {
+	if title == "" {
+		return fmt.Errorf("title cannot be empty")
+	}
 	result, err := db.Exec("INSERT INTO todos (title) VALUES (?)", title)
 	if err != nil {
 		return err
 	}
-	id, _ := result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		return err
+	}
 	fmt.Printf("Added todo #%d: %s\n", id, title)
 	return nil
 }
@@ -104,9 +119,9 @@ func listTodos(db *sql.DB, onlyDone bool) error {
 	var rows *sql.Rows
 	var err error
 	if onlyDone {
-		rows, err = db.Query("SELECT id, title, done FROM todos WHERE done = 1")
+		rows, err = db.Query("SELECT id, title, done FROM todos WHERE done = 1 ORDER BY id ASC")
 	} else {
-		rows, err = db.Query("SELECT id, title, done FROM todos")
+		rows, err = db.Query("SELECT id, title, done FROM todos ORDER BY id ASC")
 	}
 	if err != nil {
 		return err
@@ -128,6 +143,9 @@ func listTodos(db *sql.DB, onlyDone bool) error {
 		fmt.Printf("  [%s] #%d: %s\n", checkbox, id, title)
 		count++
 	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
 	if count == 0 {
 		fmt.Println("No todos yet. Add one with: todo add <title>")
 	}
@@ -135,18 +153,32 @@ func listTodos(db *sql.DB, onlyDone bool) error {
 }
 
 func doneTodo(db *sql.DB, id string) error {
-	_, err := db.Exec("UPDATE todos SET done = 1 WHERE id = ?", id)
+	result, err := db.Exec("UPDATE todos SET done = 1 WHERE id = ?", id)
 	if err != nil {
 		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("no todo with id %s", id)
 	}
 	fmt.Printf("Marked todo #%s as done\n", id)
 	return nil
 }
 
 func deleteTodo(db *sql.DB, id string) error {
-	_, err := db.Exec("DELETE FROM todos WHERE id = ?", id)
+	result, err := db.Exec("DELETE FROM todos WHERE id = ?", id)
 	if err != nil {
 		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("no todo with id %s", id)
 	}
 	fmt.Printf("Deleted todo #%s\n", id)
 	return nil
