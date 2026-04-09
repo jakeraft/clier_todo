@@ -34,7 +34,13 @@ func main() {
 			os.Exit(1)
 		}
 	case "list":
-		if err := listTodos(db); err != nil {
+		doneOnly := false
+		for _, arg := range os.Args[2:] {
+			if arg == "--done" {
+				doneOnly = true
+			}
+		}
+		if err := listTodos(db, doneOnly); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
@@ -67,7 +73,7 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  todo add <title>    Add a new todo")
-	fmt.Println("  todo list           List all todos")
+	fmt.Println("  todo list [--done]  List todos (--done: only completed)")
 	fmt.Println("  todo done <id>      Mark a todo as done")
 	fmt.Println("  todo delete <id>    Delete a todo")
 }
@@ -99,8 +105,12 @@ func addTodo(db *sql.DB, title string) error {
 	return nil
 }
 
-func listTodos(db *sql.DB) error {
-	rows, err := db.Query("SELECT id, title, done FROM todos")
+func listTodos(db *sql.DB, doneOnly bool) error {
+	query := "SELECT id, title, done FROM todos"
+	if doneOnly {
+		query += " WHERE done = 1"
+	}
+	rows, err := db.Query(query)
 	if err != nil {
 		return err
 	}
@@ -114,7 +124,11 @@ func listTodos(db *sql.DB) error {
 		if err := rows.Scan(&id, &title, &done); err != nil {
 			return err
 		}
-		fmt.Printf("  [%s] #%d: %s\n", " ", id, title)
+		status := " "
+		if done == 1 {
+			status = "x"
+		}
+		fmt.Printf("  [%s] #%d: %s\n", status, id, title)
 		count++
 	}
 	if count == 0 {
@@ -124,7 +138,7 @@ func listTodos(db *sql.DB) error {
 }
 
 func doneTodo(db *sql.DB, id string) error {
-	_, err := db.Exec("UPDATE todos SET done = 0 WHERE id = ?", id)
+	_, err := db.Exec("UPDATE todos SET done = 1 WHERE id = ?", id)
 	if err != nil {
 		return err
 	}
